@@ -101,7 +101,14 @@ public class OrderService {
         order.setOrderNumber(orderNumber);
         order.setUserId(orderDTO.getUserId());
         order.setSupplierId(orderDTO.getSupplierId());
-        order.setOrderType(orderDTO.getOrderType());
+       
+if (orderDTO.getSupplierId() == null) {
+    // Employee request
+    order.setOrderType("REQUEST");
+} else {
+    // Admin purchase
+    order.setOrderType("PURCHASE");
+}
         order.setStatus("PENDING"); // Default status
         order.setNotes(orderDTO.getNotes());
         order.setExpectedDeliveryDate(orderDTO.getExpectedDeliveryDate());
@@ -145,10 +152,13 @@ public class OrderService {
         order.setOrderItems(orderItems);
 
         Order savedOrder = orderRepository.save(order);
-
-        if ("PURCHASE".equals(savedOrder.getOrderType())) {
-            alertService.createStockRequestAlert(savedOrder);
+if ("REQUEST".equals(savedOrder.getOrderType())) {
+    for (OrderItem item : savedOrder.getOrderItems()) {
+        if (item.getProductId() != null) {
+            alertService.createStockRequestAlert(savedOrder, item.getProductId());
         }
+    }
+}
 
         auditLogService.log(
                 "ORDER_CREATED",
@@ -195,48 +205,74 @@ public class OrderService {
      * Approve order (Admin only)
      */
     @Transactional
-    public Optional<OrderDTO> approveOrder(Long id, Long adminId) {
-        Optional<Order> orderOpt = orderRepository.findById(id);
+public Optional<OrderDTO> approveOrder(Long id, Long adminId) {
 
-        if (orderOpt.isEmpty()) {
-            return Optional.empty();
-        }
+    Optional<Order> orderOpt = orderRepository.findById(id);
 
-        Order order = orderOpt.get();
-        
-        if (!"PENDING".equals(order.getStatus())) {
-            throw new RuntimeException("Only pending orders can be approved");
-        }
-        
-        order.setStatus("APPROVED");
-        order.setApprovedBy(adminId);
-        order.setApprovedAt(LocalDateTime.now());
-
-        // Update product quantities for purchase orders
-        if ("PURCHASE".equals(order.getOrderType())) {
-            for (OrderItem item : order.getOrderItems()) {
-                Optional<Product> productOpt = productRepository.findById(item.getProductId());
-                if (productOpt.isPresent()) {
-                    Product product = productOpt.get();
-                    product.setQuantity(product.getQuantity() + item.getQuantity());
-                    Product updatedProduct = productRepository.save(product);
-                    alertService.evaluateLowStockAlert(updatedProduct);
-                }
-            }
-        }
-
-        order = orderRepository.save(order);
-        alertService.createApprovalAlert(order);
-        auditLogService.log(
-                "ORDER_APPROVED",
-                "ORDER",
-                order.getId(),
-                "Approved order " + order.getOrderNumber() + " and updated stock",
-                adminId,
-                "ADMIN"
-        );
-        return Optional.of(convertToDTO(order));
+    if (orderOpt.isEmpty()) {
+        return Optional.empty();
     }
+
+    Order order = orderOpt.get();
+
+    if (!"PENDING".equals(order.getStatus())) {
+        throw new RuntimeException("Only pending orders can be approved");
+    }
+
+    order.setStatus("APPROVED");
+    order.setApprovedBy(adminId);
+    order.setApprovedAt(LocalDateTime.now());
+
+    // 🔥 FIXED LOGIC FOR BOTH TYPES
+    for (OrderItem item : order.getOrderItems()) {
+
+        Optional<Product> productOpt = productRepository.findById(item.getProductId());
+
+        if (productOpt.isPresent()) {
+
+            Product product = productOpt.get();
+
+            // ✅ STOCK IN (Supplier Purchase)
+            if ("PURCHASE".equals(order.getOrderType())) {
+
+                product.setQuantity(product.getQuantity() + item.getQuantity());
+            }
+
+            // 🔥 STOCK OUT (Employee Request)
+            else if ("REQUEST".equals(order.getOrderType())) {
+
+                if (product.getQuantity() < item.getQuantity()) {
+                    throw new RuntimeException(
+                        "Not enough stock for product: " + product.getName()
+                    );
+                }
+
+                product.setQuantity(product.getQuantity() - item.getQuantity());
+            }
+
+            Product updatedProduct = productRepository.save(product);
+
+            // Optional alert
+            alertService.evaluateLowStockAlert(updatedProduct);
+        }
+    }
+
+    order = orderRepository.save(order);
+
+    // Create approval alert
+    alertService.createApprovalAlert(order);
+
+    auditLogService.log(
+            "ORDER_APPROVED",
+            "ORDER",
+            order.getId(),
+            "Approved order " + order.getOrderNumber() + " and updated stock",
+            adminId,
+            "ADMIN"
+    );
+
+    return Optional.of(convertToDTO(order));
+}
 
     /**
      * Cancel order

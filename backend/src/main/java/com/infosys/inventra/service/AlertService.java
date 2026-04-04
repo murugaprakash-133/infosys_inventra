@@ -2,11 +2,13 @@ package com.infosys.inventra.service;
 
 import com.infosys.inventra.model.Alert;
 import com.infosys.inventra.model.Order;
+import com.infosys.inventra.model.OrderItem;
 import com.infosys.inventra.model.Product;
 import com.infosys.inventra.repository.AlertRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -78,25 +80,46 @@ public class AlertService {
         }
     }
 
-    public void createStockRequestAlert(Order order) {
-        Alert alert = new Alert();
-        alert.setOrderId(order.getId());
-        alert.setTitle("New Stock-In Request");
-        alert.setMessage("Order " + order.getOrderNumber() + " is pending admin approval.");
-        alert.setSeverity("INFO");
-        alert.setStatus("OPEN");
-        alert.setForRole("ADMIN");
-        alertRepository.save(alert);
-    }
+    public void createStockRequestAlert(Order order, Long productId) {
+    Alert alert = new Alert();
+
+    alert.setTitle("Order Request");
+    alert.setMessage("Employee requested a product");
+    alert.setAlertType("ORDER");
+    alert.setSeverity("MEDIUM");
+    alert.setStatus("ACTIVE");
+
+    // 🔥 FIX (NO NULL NOW)
+    alert.setProductId(productId);
+
+    alert.setOrderId(order.getId());
+    alert.setCreatedAt(LocalDateTime.now());
+
+    alertRepository.save(alert);
+}
 
     public void createApprovalAlert(Order order) {
-        Alert alert = new Alert();
-        alert.setOrderId(order.getId());
-        alert.setTitle("Stock-In Request Approved");
-        alert.setMessage("Order " + order.getOrderNumber() + " has been approved and stock was updated.");
-        alert.setSeverity("INFO");
-        alert.setStatus("OPEN");
-        alert.setForRole("ALL");
-        alertRepository.save(alert);
+    for (OrderItem item : order.getOrderItems()) {
+
+        if (item.getProductId() != null) {
+
+            Alert alert = new Alert();
+
+            alert.setTitle("Order Approved");
+            alert.setMessage("Order " + order.getOrderNumber() + " has been approved");
+
+            alert.setAlertType("ORDER");
+            alert.setSeverity("INFO");
+            alert.setStatus("OPEN");
+            alert.setForRole("EMPLOYEE"); // or ADMIN if needed
+
+            // 🔥 CRITICAL FIX
+            alert.setProductId(item.getProductId());
+
+            alert.setOrderId(order.getId());
+
+            alertRepository.save(alert);
+        }
     }
+}
 }
