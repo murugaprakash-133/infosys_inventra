@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL = "https://mindful-kindness-production-01b7.up.railway.app/api"; // Replace with your backend API base URL
 
 const api = axios.create({
   baseURL: API_BASE_URL,
