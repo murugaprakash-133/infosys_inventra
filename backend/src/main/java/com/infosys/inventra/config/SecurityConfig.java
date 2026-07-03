@@ -46,6 +46,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         
+                        // Temporary for testing
+                        .requestMatchers("/api/alerts/open/count").permitAll()
+
                         // Admin-only endpoints
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/suppliers/**").hasRole("ADMIN")
@@ -59,6 +62,7 @@ public class SecurityConfig {
                         
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
+                        
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
