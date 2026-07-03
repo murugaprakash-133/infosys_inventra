@@ -17,10 +17,14 @@ public class Alert {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "alert_id")
     private Long id;
 
-    @Column(name = "product_id")
+    @Column(name = "product_id", nullable = false) // 🔥 IMPORTANT FIX
     private Long productId;
+
+    @Column(name = "alert_type", nullable = false)
+    private String alertType;
 
     @Column(name = "order_id")
     private Long orderId;
@@ -58,14 +62,28 @@ public class Alert {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+
         if (status == null || status.isBlank()) {
             status = "OPEN";
+        }
+
+        if (severity == null || severity.isBlank()) {
+            severity = "INFO";
+        }
+
+        if (alertType == null || alertType.isBlank()) {
+            alertType = "GENERAL"; // 🔥 fallback safety
+        }
+
+        if (forRole == null || forRole.isBlank()) {
+            forRole = "ADMIN"; 
         }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+
         if ("RESOLVED".equals(status) && resolvedAt == null) {
             resolvedAt = LocalDateTime.now();
         }
